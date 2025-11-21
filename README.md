@@ -136,14 +136,6 @@ const normalized = normalize("é");  // NFD → NFC
 | `findIssues(text)` | Array of problematic characters found |
 | `isClean(text)` | Boolean check if text is already clean |
 
-## Design Principles
-
-- **Functional programming**: Pure functions, no mutations, composable
-- **Context-aware**: Preserves emoji modifiers only when actual emojis are present
-- **Type-safe**: Full TypeScript support with strict mode
-- **Zero dependencies**: Lightweight and secure
-- **Emoji-first**: Modern text handling that respects Unicode emoji sequences
-
 ## Common Use Cases
 
 - **LLM output sanitization**: Clean ChatGPT/Claude responses before storage
