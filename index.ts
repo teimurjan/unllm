@@ -1,27 +1,5 @@
 /**
- * Options for text cleaning
- */
-export interface CleanOptions {
-  /** Preserve line breaks (\\n) */
-  preserveLineBreaks?: boolean;
-  /** Preserve tabs (\\t) */
-  preserveTabs?: boolean;
-  /** Normalize Unicode spaces to ASCII space */
-  normalizeSpaces?: boolean;
-  /** Normalize Unicode quotes to ASCII quotes */
-  normalizeQuotes?: boolean;
-  /** Normalize Unicode dashes (em dash, en dash) to ASCII hyphen */
-  normalizeDashes?: boolean;
-  /** Normalize Unicode ellipsis (…) to three dots */
-  normalizeEllipsis?: boolean;
-  /** Collapse multiple whitespace into single space */
-  collapseWhitespace?: boolean;
-  /** Trim leading and trailing whitespace */
-  trim?: boolean;
-}
-
-/**
- * Information about a non-keyboard character found in text
+ * Information about an LLM artifact or typographic character found in text
  */
 export interface Issue {
   /** The character itself */
@@ -32,7 +10,9 @@ export interface Issue {
   codeHex: string;
   /** Position in the original string */
   position: number;
-  /** Human-readable name of the character */
+  /** Human-readable description */
+  type: 'control' | 'invisible' | 'typography';
+  /** Character name */
   name: string;
 }
 
@@ -40,244 +20,78 @@ export interface Issue {
  * Detailed inspection report
  */
 export interface InspectionReport {
-  /** Whether the text is clean (no issues found) */
-  clean: boolean;
+  /** Whether the text needs cleaning */
+  needsCleaning: boolean;
   /** Total number of issues found */
   issueCount: number;
   /** Array of all issues found */
   issues: Issue[];
-  /** Summary grouped by character name */
-  summary: Record<string, { count: number; code: string }>;
 }
 
 /**
- * Preset name type
- */
-export type PresetName = 'strict' | 'standard' | 'lenient' | 'llm';
-
-/**
- * Preset configurations optimized for different use cases
- */
-export const presets: Record<PresetName, CleanOptions> = {
-  // Only printable ASCII, no line breaks
-  strict: {
-    preserveLineBreaks: false,
-    preserveTabs: false,
-    normalizeSpaces: true,
-    normalizeQuotes: true,
-    normalizeDashes: true,
-    normalizeEllipsis: true,
-    collapseWhitespace: true,
-    trim: true,
-  },
-
-  // Balanced: preserve structure, normalize Unicode
-  standard: {
-    preserveLineBreaks: true,
-    preserveTabs: false,
-    normalizeSpaces: true,
-    normalizeQuotes: true,
-    normalizeDashes: true,
-    normalizeEllipsis: true,
-    collapseWhitespace: false,
-    trim: true,
-  },
-
-  // Minimal cleaning, preserve formatting
-  lenient: {
-    preserveLineBreaks: true,
-    preserveTabs: true,
-    normalizeSpaces: true,
-    normalizeQuotes: false,
-    normalizeDashes: false,
-    normalizeEllipsis: false,
-    collapseWhitespace: false,
-    trim: false,
-  },
-
-  // Optimized for LLM output (common issues)
-  llm: {
-    preserveLineBreaks: true,
-    preserveTabs: false,
-    normalizeSpaces: true,
-    normalizeQuotes: true,
-    normalizeDashes: true,
-    normalizeEllipsis: true,
-    collapseWhitespace: true,
-    trim: true,
-  },
-};
-
-/**
- * Default options for cleaning
- */
-const defaultOptions: Required<CleanOptions> = {
-  preserveLineBreaks: true,
-  preserveTabs: false,
-  normalizeSpaces: true,
-  normalizeQuotes: true,
-  normalizeDashes: true,
-  normalizeEllipsis: true,
-  collapseWhitespace: false,
-  trim: true,
-};
-
-/**
- * Character mappings (immutable)
+ * Character mappings for normalization
  */
 const UNICODE_SPACES = [
-  '\u00A0', // NBSP
-  '\u1680', // OGHAM_SPACE_MARK
-  '\u2000', // EN_QUAD
-  '\u2001', // EM_QUAD
-  '\u2002', // EN_SPACE
-  '\u2003', // EM_SPACE
-  '\u2004', // THREE_PER_EM_SPACE
-  '\u2005', // FOUR_PER_EM_SPACE
-  '\u2006', // SIX_PER_EM_SPACE
-  '\u2007', // FIGURE_SPACE
-  '\u2008', // PUNCTUATION_SPACE
-  '\u2009', // THIN_SPACE
-  '\u200A', // HAIR_SPACE
-  '\u202F', // NARROW_NO_BREAK_SPACE
-  '\u205F', // MEDIUM_MATHEMATICAL_SPACE
-  '\u3000', // IDEOGRAPHIC_SPACE
+  '\u00A0', // NO-BREAK SPACE
+  '\u1680', // OGHAM SPACE MARK
+  '\u2000', // EN QUAD
+  '\u2001', // EM QUAD
+  '\u2002', // EN SPACE
+  '\u2003', // EM SPACE
+  '\u2004', // THREE-PER-EM SPACE
+  '\u2005', // FOUR-PER-EM SPACE
+  '\u2006', // SIX-PER-EM SPACE
+  '\u2007', // FIGURE SPACE
+  '\u2008', // PUNCTUATION SPACE
+  '\u2009', // THIN SPACE
+  '\u200A', // HAIR SPACE
+  '\u202F', // NARROW NO-BREAK SPACE
+  '\u205F', // MEDIUM MATHEMATICAL SPACE
+  '\u3000', // IDEOGRAPHIC SPACE
 ] as const;
-
-const SINGLE_QUOTE_MAP: Record<string, string> = {
-  '\u2018': "'", // LEFT_SINGLE_QUOTATION_MARK
-  '\u2019': "'", // RIGHT_SINGLE_QUOTATION_MARK
-  '\u201A': "'", // SINGLE_LOW_9_QUOTATION_MARK
-  '\u201B': "'", // SINGLE_HIGH_REVERSED_9_QUOTATION_MARK
-  '\u2039': "'", // SINGLE_LEFT_POINTING_ANGLE_QUOTATION_MARK (fixed)
-  '\u203A': "'", // SINGLE_RIGHT_POINTING_ANGLE_QUOTATION_MARK (fixed)
-};
-
-const DOUBLE_QUOTE_MAP: Record<string, string> = {
-  '\u201C': '"', // LEFT_DOUBLE_QUOTATION_MARK
-  '\u201D': '"', // RIGHT_DOUBLE_QUOTATION_MARK
-  '\u201E': '"', // DOUBLE_LOW_9_QUOTATION_MARK
-  '\u201F': '"', // DOUBLE_HIGH_REVERSED_9_QUOTATION_MARK
-  '\u00AB': '"', // LEFT_POINTING_DOUBLE_ANGLE_QUOTATION_MARK
-  '\u00BB': '"', // RIGHT_POINTING_DOUBLE_ANGLE_QUOTATION_MARK
-};
 
 const DASH_MAP: Record<string, string> = {
-  '\u2013': '-', // EN_DASH
-  '\u2014': '-', // EM_DASH
-  '\u2015': '-', // HORIZONTAL_BAR
-  '\u2212': '-', // MINUS_SIGN (mathematical minus)
-  '\uFE58': '-', // SMALL_EM_DASH
-  '\uFE63': '-', // SMALL_HYPHEN_MINUS
+  '\u2013': '-', // EN DASH
+  '\u2014': '-', // EM DASH
+  '\u2212': '-', // MINUS SIGN
+  '\u00AD': '',  // SOFT HYPHEN (remove completely)
 };
 
+const ELLIPSIS_MAP: Record<string, string> = {
+  '\u2026': '...', // HORIZONTAL ELLIPSIS
+};
+
+// Invisible/control characters that LLMs incorrectly insert
 const INVISIBLE_CHARS = [
-  '\u0000', // NUL
-  '\u00AD', // Soft hyphen
-  '\u200B', // Zero-width space
-  '\u200C', // Zero-width non-joiner
-  '\u200D', // Zero-width joiner (used in emoji, but invisible otherwise)
-  '\u200E', // Left-to-right mark
-  '\u200F', // Right-to-left mark
-  '\u202A', // Left-to-right embedding
-  '\u202B', // Right-to-left embedding
-  '\u202C', // Pop directional formatting
-  '\u202D', // Left-to-right override
-  '\u202E', // Right-to-left override
-  '\u2060', // Word joiner
-  '\u2061', // Function application
-  '\u2062', // Invisible times
-  '\u2063', // Invisible separator
-  '\u2064', // Invisible plus
-  '\u2066', // Left-to-right isolate
-  '\u2067', // Right-to-left isolate
-  '\u2068', // First strong isolate
-  '\u2069', // Pop directional isolate
-  '\uFEFF', // Zero-width no-break space (BOM)
-  '\uFFFC', // Object replacement character
-  '\uFFFD', // Replacement character
-] as const;
+  0x0000, // NULL
+  0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007, // Control chars
+  0x0008, // BACKSPACE
+  0x000B, // VERTICAL TAB
+  0x000C, // FORM FEED
+  0x000E, 0x000F, 0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015,
+  0x0016, 0x0017, 0x0018, 0x0019, 0x001A, 0x001B, 0x001C, 0x001D, 0x001E, 0x001F,
+  0x007F, // DELETE
+  0x0080, 0x0081, 0x0082, 0x0083, 0x0084, 0x0085, 0x0086, 0x0087, 0x0088, 0x0089,
+  0x008A, 0x008B, 0x008C, 0x008D, 0x008E, 0x008F, 0x0090, 0x0091, 0x0092, 0x0093,
+  0x0094, 0x0095, 0x0096, 0x0097, 0x0098, 0x0099, 0x009A, 0x009B, 0x009C, 0x009D,
+  0x009E, 0x009F,
+  0x200B, // ZERO WIDTH SPACE
+  0x200C, // ZERO WIDTH NON-JOINER
+  0x200E, // LEFT-TO-RIGHT MARK
+  0x200F, // RIGHT-TO-LEFT MARK
+  0x2060, // WORD JOINER
+  0x2061, // FUNCTION APPLICATION
+  0x2062, // INVISIBLE TIMES
+  0x2063, // INVISIBLE SEPARATOR
+  0x2064, // INVISIBLE PLUS
+  0xFEFF, // ZERO WIDTH NO-BREAK SPACE (BOM)
+];
 
-const EMOJI_INVISIBLE_CHARS = [
-  '\u200D', // Zero-width joiner (used in multi-part emojis)
-] as const;
-
-const VARIATION_SELECTORS_REGEX = /[\uFE00-\uFE0F]/g;
-
-const CHAR_NAMES: Record<number, string> = {
-  0x0000: 'NUL',
-  0x0009: 'TAB',
-  0x000A: 'LF',
-  0x000D: 'CR',
-  0x00A0: 'NBSP',
-  0x1680: 'OGHAM_SPACE_MARK',
-  0x2000: 'EN_QUAD',
-  0x2001: 'EM_QUAD',
-  0x2002: 'EN_SPACE',
-  0x2003: 'EM_SPACE',
-  0x2004: 'THREE_PER_EM_SPACE',
-  0x2005: 'FOUR_PER_EM_SPACE',
-  0x2006: 'SIX_PER_EM_SPACE',
-  0x2007: 'FIGURE_SPACE',
-  0x2008: 'PUNCTUATION_SPACE',
-  0x2009: 'THIN_SPACE',
-  0x200A: 'HAIR_SPACE',
-  0x200B: 'ZERO_WIDTH_SPACE',
-  0x200C: 'ZERO_WIDTH_NON_JOINER',
-  0x200D: 'ZERO_WIDTH_JOINER',
-  0x202F: 'NARROW_NO_BREAK_SPACE',
-  0x205F: 'MEDIUM_MATHEMATICAL_SPACE',
-  0x2060: 'WORD_JOINER',
-  0x3000: 'IDEOGRAPHIC_SPACE',
-  0xFEFF: 'ZERO_WIDTH_NO_BREAK_SPACE',
-  0x2018: 'LEFT_SINGLE_QUOTATION_MARK',
-  0x2019: 'RIGHT_SINGLE_QUOTATION_MARK',
-  0x201A: 'SINGLE_LOW_9_QUOTATION_MARK',
-  0x201B: 'SINGLE_HIGH_REVERSED_9_QUOTATION_MARK',
-  0x201C: 'LEFT_DOUBLE_QUOTATION_MARK',
-  0x201D: 'RIGHT_DOUBLE_QUOTATION_MARK',
-  0x201E: 'DOUBLE_LOW_9_QUOTATION_MARK',
-  0x201F: 'DOUBLE_HIGH_REVERSED_9_QUOTATION_MARK',
-  0x2039: 'SINGLE_LEFT_POINTING_ANGLE_QUOTATION_MARK',
-  0x203A: 'SINGLE_RIGHT_POINTING_ANGLE_QUOTATION_MARK',
-  0x00AB: 'LEFT_POINTING_DOUBLE_ANGLE_QUOTATION_MARK',
-  0x00BB: 'RIGHT_POINTING_DOUBLE_ANGLE_QUOTATION_MARK',
-  0x2013: 'EN_DASH',
-  0x2014: 'EM_DASH',
-  0x2015: 'HORIZONTAL_BAR',
-  0x2016: 'DOUBLE_VERTICAL_LINE',
-  0x2026: 'HORIZONTAL_ELLIPSIS',
-  0x00AD: 'SOFT_HYPHEN',
-  0x200E: 'LEFT_TO_RIGHT_MARK',
-  0x200F: 'RIGHT_TO_LEFT_MARK',
-  0x202A: 'LEFT_TO_RIGHT_EMBEDDING',
-  0x202B: 'RIGHT_TO_LEFT_EMBEDDING',
-  0x202C: 'POP_DIRECTIONAL_FORMATTING',
-  0x202D: 'LEFT_TO_RIGHT_OVERRIDE',
-  0x202E: 'RIGHT_TO_LEFT_OVERRIDE',
-  0x2061: 'FUNCTION_APPLICATION',
-  0x2062: 'INVISIBLE_TIMES',
-  0x2063: 'INVISIBLE_SEPARATOR',
-  0x2064: 'INVISIBLE_PLUS',
-  0x2066: 'LEFT_TO_RIGHT_ISOLATE',
-  0x2067: 'RIGHT_TO_LEFT_ISOLATE',
-  0x2068: 'FIRST_STRONG_ISOLATE',
-  0x2069: 'POP_DIRECTIONAL_ISOLATE',
-  0x2212: 'MINUS_SIGN',
-  0xFE58: 'SMALL_EM_DASH',
-  0xFE63: 'SMALL_HYPHEN_MINUS',
-  0xFFFC: 'OBJECT_REPLACEMENT_CHARACTER',
-  0xFFFD: 'REPLACEMENT_CHARACTER',
-};
-
-/**
- * Pure function: Check if a character is an emoji (excluding emoji modifiers)
- */
-const isActualEmoji = (char: string): boolean => {
+// Emoji detection
+const isEmoji = (char: string): boolean => {
   const code = char.codePointAt(0);
   if (!code) return false;
 
-  // Actual emoji ranges (excluding modifiers like ZWJ and variation selectors)
   return (
     (code >= 0x1F600 && code <= 0x1F64F) || // Emoticons
     (code >= 0x1F300 && code <= 0x1F5FF) || // Misc Symbols and Pictographs
@@ -288,308 +102,181 @@ const isActualEmoji = (char: string): boolean => {
     (code >= 0x1F900 && code <= 0x1F9FF) || // Supplemental Symbols and Pictographs
     (code >= 0x1FA00 && code <= 0x1FA6F) || // Chess Symbols
     (code >= 0x1FA70 && code <= 0x1FAFF) || // Symbols and Pictographs Extended-A
-    (code >= 0x2600 && code <= 0x26FF) ||   // Misc symbols
+    (code >= 0x2600 && code <= 0x26FF) ||   // Miscellaneous Symbols
     (code >= 0x2700 && code <= 0x27BF) ||   // Dingbats
-    (code >= 0x1F1E6 && code <= 0x1F1FF) || // Regional Indicator Symbols (flags)
-    (code >= 0x1F191 && code <= 0x1F251) || // Enclosed characters
-    (code >= 0x1F100 && code <= 0x1F1FF) || // Enclosed Alphanumeric Supplement
-    (code >= 0x2300 && code <= 0x23FF) ||   // Miscellaneous Technical
-    (code >= 0x2B50 && code <= 0x2B55)      // Stars
-  );
-};
-
-/**
- * Pure function: Check if a character is an emoji or emoji modifier
- */
-const isEmoji = (char: string): boolean => {
-  const code = char.codePointAt(0);
-  if (!code) return false;
-
-  return (
-    isActualEmoji(char) ||
     (code >= 0xFE00 && code <= 0xFE0F) ||   // Variation Selectors
-    code === 0x200D ||                       // Zero Width Joiner (used in emoji sequences)
+    (code >= 0x1F1E6 && code <= 0x1F1FF) || // Regional Indicator Symbols (flags)
     (code >= 0x1F3FB && code <= 0x1F3FF)    // Emoji skin tone modifiers
   );
 };
 
-/**
- * Pure function: Check if a character is keyboard-printable or emoji
- */
-const isKeyboardChar = (char: string): boolean => {
-  if (char.length === 0) return false;
-  const code = char.charCodeAt(0);
+// Check if text contains actual emojis (not just modifiers)
+const containsEmoji = (text: string): boolean =>
+  Array.from(text).some(char => {
+    const code = char.codePointAt(0);
+    if (!code) return false;
+    // Check for actual emojis, not just modifiers
+    return (
+      (code >= 0x1F600 && code <= 0x1F64F) ||
+      (code >= 0x1F300 && code <= 0x1F5FF) ||
+      (code >= 0x1F680 && code <= 0x1F6FF) ||
+      (code >= 0x1F700 && code <= 0x1F77F) ||
+      (code >= 0x1F780 && code <= 0x1F7FF) ||
+      (code >= 0x1F800 && code <= 0x1F8FF) ||
+      (code >= 0x1F900 && code <= 0x1F9FF) ||
+      (code >= 0x1FA00 && code <= 0x1FA6F) ||
+      (code >= 0x1FA70 && code <= 0x1FAFF) ||
+      (code >= 0x2600 && code <= 0x26FF) ||
+      (code >= 0x2700 && code <= 0x27BF) ||
+      (code >= 0x1F1E6 && code <= 0x1F1FF)
+    );
+  });
 
-  // Printable ASCII (32-126) + TAB (9) + LF (10) + CR (13)
-  if ((code >= 32 && code <= 126) || code === 9 || code === 10 || code === 13) {
-    return true;
-  }
+// Check if character should be cleaned (control, invisible, or typography)
+const needsCleaning = (char: string): boolean => {
+  const code = char.codePointAt(0);
+  if (code === undefined) return false;
 
   // Allow emojis
-  if (isEmoji(char)) {
-    return true;
-  }
+  if (isEmoji(char)) return false;
+
+  // Control and invisible characters
+  if (INVISIBLE_CHARS.includes(code)) return true;
+
+  // ZWJ is only allowed in emoji context
+  if (code === 0x200D) return !isEmoji(char);
+
+  // Typographic characters that should be normalized
+  if (UNICODE_SPACES.includes(char as any)) return true;
+  if (char in DASH_MAP) return true;
+  if (char in ELLIPSIS_MAP) return true;
 
   return false;
 };
 
-/**
- * Pure function: Get character name for a Unicode code point
- */
-const getCharName = (code: number): string =>
-  CHAR_NAMES[code] ?? `U+${code.toString(16).toUpperCase().padStart(4, '0')}`;
-
-/**
- * Pure function: Normalize Unicode spaces to ASCII space
- */
-const normalizeSpaces = (text: string): string =>
-  UNICODE_SPACES.reduce(
-    (result, space) => result.replaceAll(space, ' '),
-    text
-  );
-
-/**
- * Pure function: Normalize Unicode quotes to ASCII quotes
- */
-const normalizeQuotes = (text: string): string =>
-  Object.entries({ ...SINGLE_QUOTE_MAP, ...DOUBLE_QUOTE_MAP }).reduce(
-    (result, [unicode, ascii]) => result.replaceAll(unicode, ascii),
-    text
-  );
-
-/**
- * Pure function: Normalize Unicode dashes to ASCII hyphen
- */
-const normalizeDashes = (text: string): string =>
-  Object.entries(DASH_MAP).reduce(
-    (result, [unicode, ascii]) => result.replaceAll(unicode, ascii),
-    text
-  );
-
-/**
- * Pure function: Normalize Unicode ellipsis to three dots
- */
-const normalizeEllipsis = (text: string): string =>
-  text.replaceAll('\u2026', '...');
-
-/**
- * Pure function: Check if a string contains any actual emojis (not just modifiers)
- */
-const containsEmoji = (text: string): boolean =>
-  Array.from(text).some(isActualEmoji);
-
-/**
- * Pure function: Remove all invisible characters (strict mode)
- */
-const removeInvisibleChars = (text: string): string =>
-  INVISIBLE_CHARS.reduce(
-    (result, char) => result.replaceAll(char, ''),
-    text.replace(VARIATION_SELECTORS_REGEX, '')
-  );
-
-/**
- * Pure function: Remove invisible characters but preserve emoji components
- */
-const removeInvisibleCharsExceptEmoji = (text: string): string => {
-  // If no emojis present, do strict removal
-  if (!containsEmoji(text)) {
-    return removeInvisibleChars(text);
+// Get character type and name
+const getCharInfo = (char: string, code: number): { type: Issue['type'], name: string } => {
+  // Control characters
+  if (code >= 0x0000 && code <= 0x001F) {
+    if (code === 0x0000) return { type: 'control', name: 'NULL' };
+    if (code === 0x0008) return { type: 'control', name: 'BACKSPACE' };
+    if (code === 0x000B) return { type: 'control', name: 'VERTICAL TAB' };
+    if (code === 0x000C) return { type: 'control', name: 'FORM FEED' };
+    return { type: 'control', name: `CONTROL_${code.toString(16).toUpperCase()}` };
   }
 
-  // If emojis present, preserve ZWJ and variation selectors
-  const charsToRemove = INVISIBLE_CHARS.filter(
-    char => !EMOJI_INVISIBLE_CHARS.includes(char as typeof EMOJI_INVISIBLE_CHARS[number])
-  );
+  if (code >= 0x007F && code <= 0x009F) {
+    if (code === 0x007F) return { type: 'control', name: 'DELETE' };
+    return { type: 'control', name: `CONTROL_${code.toString(16).toUpperCase()}` };
+  }
 
-  return charsToRemove.reduce(
-    (result, char) => result.replaceAll(char, ''),
-    text
-    // Keep variation selectors when emojis are present
-  );
+  // Invisible characters
+  if (code === 0x200B) return { type: 'invisible', name: 'ZERO WIDTH SPACE' };
+  if (code === 0x200C) return { type: 'invisible', name: 'ZERO WIDTH NON-JOINER' };
+  if (code === 0x200D) return { type: 'invisible', name: 'ZERO WIDTH JOINER' };
+  if (code === 0x200E) return { type: 'invisible', name: 'LEFT-TO-RIGHT MARK' };
+  if (code === 0x200F) return { type: 'invisible', name: 'RIGHT-TO-LEFT MARK' };
+  if (code === 0x2060) return { type: 'invisible', name: 'WORD JOINER' };
+  if (code === 0x2061) return { type: 'invisible', name: 'FUNCTION APPLICATION' };
+  if (code === 0x2062) return { type: 'invisible', name: 'INVISIBLE TIMES' };
+  if (code === 0x2063) return { type: 'invisible', name: 'INVISIBLE SEPARATOR' };
+  if (code === 0x2064) return { type: 'invisible', name: 'INVISIBLE PLUS' };
+  if (code === 0xFEFF) return { type: 'invisible', name: 'ZERO WIDTH NO-BREAK SPACE (BOM)' };
+
+  // Typography
+  if (UNICODE_SPACES.includes(char as any)) {
+    if (code === 0x00A0) return { type: 'typography', name: 'NO-BREAK SPACE' };
+    if (code === 0x202F) return { type: 'typography', name: 'NARROW NO-BREAK SPACE' };
+    return { type: 'typography', name: 'UNICODE SPACE' };
+  }
+
+  if (char in DASH_MAP) {
+    if (code === 0x2013) return { type: 'typography', name: 'EN DASH' };
+    if (code === 0x2014) return { type: 'typography', name: 'EM DASH' };
+    if (code === 0x2212) return { type: 'typography', name: 'MINUS SIGN' };
+    if (code === 0x00AD) return { type: 'typography', name: 'SOFT HYPHEN' };
+  }
+
+  if (code === 0x2026) return { type: 'typography', name: 'HORIZONTAL ELLIPSIS' };
+
+  return { type: 'typography', name: `U+${code.toString(16).toUpperCase().padStart(4, '0')}` };
 };
 
 /**
- * Pure function: Filter characters based on preservation rules
+ * Inspect text for LLM artifacts and typographic characters
+ * @param text - Text to inspect
+ * @returns Detailed report of issues found
  */
-const filterChars = (
-  text: string,
-  preserveLineBreaks: boolean,
-  preserveTabs: boolean
-): string =>
-  Array.from(text)
-    .filter((char) => {
-      const code = char.charCodeAt(0);
-      return (
-        (code >= 32 && code <= 126) || // Printable ASCII
-        (preserveLineBreaks && (code === 10 || code === 13)) || // LF or CR
-        (preserveTabs && code === 9) || // TAB
-        isEmoji(char) // Preserve emojis
-      );
-    })
-    .join('');
+export const inspect = (text: string): InspectionReport => {
+  const issues: Issue[] = [];
 
-/**
- * Pure function: Collapse whitespace
- */
-const collapseWhitespace = (
-  text: string,
-  preserveLineBreaks: boolean,
-  preserveTabs: boolean
-): string => {
-  if (preserveLineBreaks && preserveTabs) {
-    return text.replace(/[ \t]+/g, ' ');
-  }
-  if (preserveLineBreaks) {
-    return text.replace(/ +/g, ' ');
-  }
-  if (preserveTabs) {
-    return text.replace(/[ \n\r]+/g, ' ');
-  }
-  return text.replace(/\s+/g, ' ');
-};
+  Array.from(text).forEach((char, position) => {
+    if (needsCleaning(char)) {
+      const code = char.codePointAt(0)!;
+      const { type, name } = getCharInfo(char, code);
 
-/**
- * Pure function: Detect non-keyboard characters in text
- */
-const detectNonKeyboardChars = (text: string): Issue[] =>
-  Array.from(text)
-    .map((char, position) => ({ char, position }))
-    .filter(({ char }) => !isKeyboardChar(char))
-    .map(({ char, position }) => {
-      const code = char.charCodeAt(0);
-      return {
+      issues.push({
         char,
         code,
         codeHex: `U+${code.toString(16).toUpperCase().padStart(4, '0')}`,
         position,
-        name: getCharName(code),
-      };
-    });
-
-/**
- * Pure function: Create summary from issues
- */
-const createSummary = (
-  issues: Issue[]
-): Record<string, { count: number; code: string }> =>
-  issues.reduce((summary, issue) => {
-    const existing = summary[issue.name];
-    return {
-      ...summary,
-      [issue.name]: {
-        count: existing ? existing.count + 1 : 1,
-        code: issue.codeHex,
-      },
-    };
-  }, {} as Record<string, { count: number; code: string }>);
-
-/**
- * Pure function: Apply transformations as a pipeline
- */
-const pipe =
-  <T>(...fns: Array<(arg: T) => T>) =>
-  (value: T): T =>
-    fns.reduce((acc, fn) => fn(acc), value);
-
-/**
- * Pure function: Core sanitization logic
- */
-const sanitize = (text: string, options: CleanOptions): string => {
-  const opts = { ...defaultOptions, ...options };
-
-  const transformations = [
-    removeInvisibleCharsExceptEmoji, // Smart removal that preserves emoji components
-    opts.normalizeSpaces ? normalizeSpaces : (t: string) => t,
-    opts.normalizeQuotes ? normalizeQuotes : (t: string) => t,
-    opts.normalizeDashes ? normalizeDashes : (t: string) => t,
-    opts.normalizeEllipsis ? normalizeEllipsis : (t: string) => t,
-    (t: string) => filterChars(t, opts.preserveLineBreaks, opts.preserveTabs),
-    opts.collapseWhitespace
-      ? (t: string) => collapseWhitespace(t, opts.preserveLineBreaks, opts.preserveTabs)
-      : (t: string) => t,
-    opts.trim ? (t: string) => t.trim() : (t: string) => t,
-  ];
-
-  return pipe(...transformations)(text);
-};
-
-/**
- * Clean LLM output to keyboard characters only
- * @param text - Text to clean
- * @param options - Cleaning options
- * @returns Cleaned text
- */
-export const clean = (text: string, options: CleanOptions = {}): string =>
-  sanitize(text, { ...presets.standard, ...options });
-
-/**
- * Clean with preset configuration
- * @param text - Text to clean
- * @param preset - 'strict' | 'standard' | 'lenient' | 'llm'
- * @returns Cleaned text
- */
-export const cleanWith = (text: string, preset: PresetName = 'standard'): string => {
-  if (!presets[preset]) {
-    throw new Error(`Unknown preset: ${preset}. Available: ${Object.keys(presets).join(', ')}`);
-  }
-  return sanitize(text, presets[preset]);
-};
-
-
-/**
- * Normalize Unicode spaces, quotes, dashes, and ellipsis to ASCII equivalents
- * @param text - Text to normalize
- * @returns Normalized text
- */
-export const normalize = (text: string): string =>
-  sanitize(text, {
-    preserveLineBreaks: true,
-    preserveTabs: true,
-    normalizeSpaces: true,
-    normalizeQuotes: true,
-    normalizeDashes: true,
-    normalizeEllipsis: true,
-    collapseWhitespace: false,
-    trim: false,
+        type,
+        name,
+      });
+    }
   });
 
-/**
- * Find non-keyboard characters in text
- * @param text - Text to analyze
- * @returns Array of issues found
- */
-export const findIssues = (text: string): Issue[] =>
-  detectNonKeyboardChars(text);
-
-/**
- * Check if text contains only keyboard characters
- * @param text - Text to check
- * @returns true if text is clean
- */
-export const isClean = (text: string): boolean =>
-  detectNonKeyboardChars(text).length === 0;
-
-/**
- * Get detailed report about non-keyboard characters
- * @param text - Text to analyze
- * @returns Report with issues and statistics
- */
-export const inspect = (text: string): InspectionReport => {
-  const issues = detectNonKeyboardChars(text);
   return {
-    clean: issues.length === 0,
+    needsCleaning: issues.length > 0,
     issueCount: issues.length,
     issues,
-    summary: createSummary(issues),
   };
 };
 
-export default {
-  clean,
-  cleanWith,
-  normalize,
-  findIssues,
-  isClean,
-  inspect,
-  presets,
+/**
+ * Clean LLM output by removing artifacts and normalizing typography
+ * - Removes control characters and invisible formatting
+ * - Converts Unicode spaces to regular spaces
+ * - Converts em/en dashes to hyphens
+ * - Converts ellipsis to three dots
+ * - Preserves emojis and international text (Arabic, Cyrillic, Chinese, etc.)
+ * - Preserves quotes (removed from normalization)
+ *
+ * @param text - Text to clean
+ * @returns Cleaned text
+ */
+export const clean = (text: string): string => {
+  // Remove invisible characters (context-aware for emojis)
+  let result = text;
+
+  const hasEmojis = containsEmoji(text);
+
+  // Remove control and invisible characters
+  INVISIBLE_CHARS.forEach(code => {
+    // Skip ZWJ if we have emojis
+    if (code === 0x200D && hasEmojis) return;
+    result = result.replaceAll(String.fromCodePoint(code), '');
+  });
+
+  // Remove standalone ZWJ (not in emoji context)
+  if (!hasEmojis) {
+    result = result.replaceAll('\u200D', '');
+  }
+
+  // Normalize Unicode spaces to regular space
+  UNICODE_SPACES.forEach(space => {
+    result = result.replaceAll(space, ' ');
+  });
+
+  // Normalize dashes
+  Object.entries(DASH_MAP).forEach(([from, to]) => {
+    result = result.replaceAll(from, to);
+  });
+
+  // Normalize ellipsis
+  Object.entries(ELLIPSIS_MAP).forEach(([from, to]) => {
+    result = result.replaceAll(from, to);
+  });
+
+  return result;
 };
