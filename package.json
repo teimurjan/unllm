@@ -1,7 +1,7 @@
 {
   "name": "unllm",
   "description": "Clean LLM output to keyboard-printable text",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "license": "MIT",
   "author": "Teimur Gasanov <me@teimurjan.dev> (https://github.com/teimurjan)",
   "repository": {
