@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>unllm - Clean LLM Output</title>
+  <meta name="description" content="Clean invisible Unicode characters from LLM output">
+  <link rel="icon" href="./logo.webp">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import van from "https://cdn.jsdelivr.net/npm/vanjs-core@1.5.2/src/van.min.js";
+
+    import { clean, inspect } from "./dist/index.mjs";
+
+    const { div, textarea, button, label, input, span, h1, p, pre, code } = van.tags;
+
+    const inputText = van.state("");
+    const invisibleChecked = van.state(true);
+    const spacesChecked = van.state(true);
+    const dashesChecked = van.state(false);
+    const ellipsisChecked = van.state(false);
+
+    const cleanedText = van.derive(() => {
+      if (!inputText.val) return "";
+      return clean(inputText.val, {
+        invisible: invisibleChecked.val,
+        spaces: spacesChecked.val,
+        dashes: dashesChecked.val,
+        ellipsis: ellipsisChecked.val,
+      });
+    });
+
+    const issues = van.derive(() => {
+      if (!inputText.val) return [];
+      return inspect(inputText.val, {
+        invisible: invisibleChecked.val,
+        spaces: spacesChecked.val,
+        dashes: dashesChecked.val,
+        ellipsis: ellipsisChecked.val,
+      });
+    });
+
+    const Checkbox = (label_text, checked) =>
+      label(
+        { class: "flex items-center gap-2 cursor-pointer select-none" },
+        input({
+          type: "checkbox",
+          checked: checked.val,
+          class: "w-4 h-4 accent-emerald-500 cursor-pointer",
+          onchange: e => checked.val = e.target.checked,
+        }),
+        span({ class: "text-emerald-400 text-sm font-medium" }, label_text)
+      );
+
+    const copyButtonText = van.state("Copy");
+
+    const copyToClipboard = () => {
+      navigator.clipboard.writeText(cleanedText.val);
+      copyButtonText.val = "Copied";
+      setTimeout(() => {
+        copyButtonText.val = "Copy";
+      }, 3000);
+    };
+
+    const App = div(
+      { class: "min-h-screen bg-slate-900 text-gray-100 p-8 flex flex-col" },
+
+      div(
+        { class: "max-w-6xl w-full mx-auto mb-8" },
+        h1(
+          { class: "text-4xl font-bold text-emerald-400 mb-2" },
+          "unllm"
+        ),
+        p(
+          { class: "text-gray-400 text-lg" },
+          "Clean invisible Unicode characters from LLM output"
+        )
+      ),
+
+      div(
+        { class: "max-w-6xl w-full mx-auto mb-6 flex flex-wrap gap-6 bg-slate-800/50 p-4 rounded-lg border border-slate-700" },
+        Checkbox("Remove invisible chars", invisibleChecked),
+        Checkbox("Normalize spaces", spacesChecked),
+        Checkbox("Normalize dashes", dashesChecked),
+        Checkbox("Normalize ellipsis", ellipsisChecked),
+      ),
+
+      div(
+        { class: "max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6" },
+
+        div(
+          { class: "flex flex-col" },
+          div(
+            { class: "flex justify-between items-center mb-2 h-8" },
+            label(
+              { class: "text-emerald-400 font-semibold text-sm uppercase tracking-wide" },
+              "Input (Paste LLM output)"
+            )
+          ),
+          textarea({
+            class: "w-full h-96 bg-slate-800 border border-slate-700 rounded-lg p-4 text-gray-100 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none",
+            placeholder: "Paste your AI-generated text here...\n\nTry pasting text from ChatGPT or Claude that might contain:\n• Non-breaking spaces (U+00A0)\n• Smart quotes (U+2019)\n• Em/en dashes (U+2014, U+2013)\n• Ellipsis (U+2026)\n• Zero-width characters\n• Other invisible Unicode",
+            oninput: e => inputText.val = e.target.value,
+          }),
+          div(
+            { class: "mt-2 text-sm" },
+            span(
+              { class: "text-gray-400" },
+              "Issues found: "
+            ),
+            span(
+              {
+                class: () => issues.val.length > 0 ? "text-red-400 font-semibold" : "text-emerald-400"
+              },
+              () => issues.val.length
+            )
+          )
+        ),
+
+        div(
+          { class: "flex flex-col" },
+          div(
+            { class: "flex justify-between items-center mb-2 h-8" },
+            label(
+              { class: "text-emerald-400 font-semibold text-sm uppercase tracking-wide" },
+              "Cleaned Output"
+            ),
+            button({
+              class: "px-4 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+              onclick: copyToClipboard,
+              disabled: () => !cleanedText.val,
+            }, () => copyButtonText.val)
+          ),
+          textarea({
+            class: "w-full h-96 bg-slate-800 border border-slate-700 rounded-lg p-4 text-gray-100 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none",
+            readonly: true,
+            value: () => cleanedText.val,
+            placeholder: "Cleaned text will appear here..."
+          }),
+          div(
+            { class: "mt-2 text-sm" },
+            span(
+              { class: "text-gray-400" },
+              () => cleanedText.val ? `${cleanedText.val.length} characters` : ""
+            )
+          )
+        )
+      ),
+
+      () => issues.val.length > 0 ? div(
+        { class: "max-w-6xl w-full mx-auto mt-6 bg-slate-800/50 border border-slate-700 rounded-lg p-4" },
+        h2(
+          { class: "text-emerald-400 font-semibold mb-3 text-sm uppercase tracking-wide" },
+          "Issues Detected"
+        ),
+        div(
+          { class: "space-y-2" },
+          ...issues.val.map(issue =>
+            div(
+              { class: "flex items-center gap-3 text-sm bg-slate-800 p-3 rounded border border-slate-700" },
+              code(
+                { class: "text-red-400 font-mono bg-slate-900 px-2 py-1 rounded" },
+                issue.hex
+              ),
+              span({ class: "text-gray-300" }, issue.name),
+              span({ class: "text-gray-500" }, `at position ${issue.position}`),
+              span(
+                { class: "text-emerald-400 text-xs uppercase px-2 py-1 bg-emerald-900/30 rounded" },
+                issue.type
+              )
+            )
+          )
+        )
+      ) : null,
+
+      div(
+        { class: "max-w-6xl w-full mx-auto mt-auto text-center text-gray-500 text-sm" },
+        p(
+          "Built with ",
+          span({ class: "text-emerald-400" }, "unllm"),
+          " • ",
+          van.tags.a(
+            {
+              href: "https://github.com/teimurjan/unllm",
+              class: "text-emerald-400 hover:underline",
+              target: "_blank"
+            },
+            "GitHub"
+          ),
+          " • ",
+          van.tags.a(
+            {
+              href: "https://www.npmjs.com/package/unllm",
+              class: "text-emerald-400 hover:underline",
+              target: "_blank"
+            },
+            "npm"
+          )
+        )
+      )
+    );
+
+    van.add(document.body, App);
+  </script>
+</head>
+<body>
+</body>
+</html>

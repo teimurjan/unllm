@@ -17,7 +17,8 @@
   ],
   "type": "module",
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "serve": "^14.2.5"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -39,6 +40,7 @@
     "build:cjs": "bun build ./index.ts --outfile dist/index.cjs --minify --format cjs",
     "build:esm": "bun build ./index.ts --outfile dist/index.mjs --minify --format esm",
     "build:types": "bun run tsc --project tsconfig.types.json",
-    "build": "bun run build:cjs && bun run build:esm && bun run build:types"
+    "build": "bun run build:cjs && bun run build:esm && bun run build:types",
+    "serve:site": "bun run build && bun serve ."
   }
 }

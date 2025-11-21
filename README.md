@@ -1,8 +1,13 @@
 # unllm
 
+<div align="center">
+
 [![npm version](https://badge.fury.io/js/unllm.svg)](https://www.npmjs.com/package/unllm)
 [![Test](https://github.com/teimurjan/unllm/actions/workflows/test.yml/badge.svg)](https://github.com/teimurjan/unllm/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+<img src="./logo.webp" width="200" />
+</div>
 
 Convert LLM output to clean, human-like text by removing AI artifacts and normalizing typography.
 
