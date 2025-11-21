@@ -1,0 +1,44 @@
+{
+  "name": "unllm",
+  "description": "Clean LLM output to keyboard-printable text",
+  "version": "0.0.1",
+  "license": "MIT",
+  "author": "Teimur Gasanov <me@teimurjan.dev> (https://github.com/teimurjan)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/teimurjan/unllm.git"
+  },
+  "keywords": [
+    "llm",
+    "clean",
+    "text",
+    "keyboard",
+    "printable"
+  ],
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:cjs": "bun build ./index.ts --outfile dist/index.cjs --minify --format cjs",
+    "build:esm": "bun build ./index.ts --outfile dist/index.mjs --minify --format esm",
+    "build:types": "bun run tsc --project tsconfig.types.json",
+    "build": "bun run build:cjs && bun run build:esm && bun run build:types"
+  }
+}
