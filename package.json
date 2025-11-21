@@ -6,7 +6,7 @@
   "author": "Teimur Gasanov <me@teimurjan.dev> (https://github.com/teimurjan)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/teimurjan/unllm.git"
+    "url": "git+https://github.com/teimurjan/unllm.git"
   },
   "keywords": [
     "llm",
