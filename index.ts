@@ -1,4 +1,18 @@
 /**
+ * Options for cleaning and inspection
+ */
+export interface CleanOptions {
+  /** Remove/detect control and invisible characters (default: true) */
+  invisible?: boolean;
+  /** Normalize/detect Unicode spaces to regular spaces (default: true) */
+  spaces?: boolean;
+  /** Normalize/detect em/en dashes to hyphens (default: false) */
+  dashes?: boolean;
+  /** Normalize/detect ellipsis to three dots (default: false) */
+  ellipsis?: boolean;
+}
+
+/**
  * Information about an LLM artifact or typographic character found in text
  */
 export interface Issue {
@@ -7,7 +21,7 @@ export interface Issue {
   /** Unicode code point */
   code: number;
   /** Unicode code point in hexadecimal */
-  codeHex: string;
+  hex: string;
   /** Position in the original string */
   position: number;
   /** Human-readable description */
@@ -17,16 +31,14 @@ export interface Issue {
 }
 
 /**
- * Detailed inspection report
+ * Default options
  */
-export interface InspectionReport {
-  /** Whether the text needs cleaning */
-  needsCleaning: boolean;
-  /** Total number of issues found */
-  issueCount: number;
-  /** Array of all issues found */
-  issues: Issue[];
-}
+const defaultOptions: Required<CleanOptions> = {
+  invisible: true,
+  spaces: true,
+  dashes: false,
+  ellipsis: false,
+};
 
 /**
  * Character mappings for normalization
@@ -179,7 +191,7 @@ const containsEmoji = (text: string): boolean =>
   });
 
 // Check if character should be cleaned (control, invisible, or typography)
-const needsCleaning = (char: string): boolean => {
+const needsCleaning = (char: string, options: Required<CleanOptions>): boolean => {
   const code = char.codePointAt(0);
   if (code === undefined) return false;
 
@@ -187,14 +199,16 @@ const needsCleaning = (char: string): boolean => {
   if (isEmoji(char)) return false;
 
   // Control and invisible characters
-  if (INVISIBLE_CHARS.includes(code)) return true;
-
-  // ZWJ is only allowed in emoji context
-  if (code === 0x200d) return !isEmoji(char);
+  if (options.invisible) {
+    if (INVISIBLE_CHARS.includes(code)) return true;
+    // ZWJ is only allowed in emoji context
+    if (code === 0x200d) return !isEmoji(char);
+  }
 
   // Typographic characters that should be normalized
-  if (UNICODE_SPACES.includes(char as any)) return true;
-  if (char in DASH_MAP) return true;
+  if (options.spaces && UNICODE_SPACES.includes(char as any)) return true;
+  if (options.dashes && char in DASH_MAP) return true;
+  if (options.ellipsis && code === 0x2026) return true;
 
   return false;
 };
@@ -265,20 +279,22 @@ const getCharInfo = (
 /**
  * Inspect text for LLM artifacts and typographic characters
  * @param text - Text to inspect
- * @returns Detailed report of issues found
+ * @param options - What to detect (default: invisible and spaces only)
+ * @returns Array of issues found
  */
-export const inspect = (text: string): InspectionReport => {
+export const inspect = (text: string, options: CleanOptions = {}): Issue[] => {
+  const opts: Required<CleanOptions> = { ...defaultOptions, ...options };
   const issues: Issue[] = [];
 
   Array.from(text).forEach((char, position) => {
-    if (needsCleaning(char)) {
+    if (needsCleaning(char, opts)) {
       const code = char.codePointAt(0)!;
       const { type, name } = getCharInfo(char, code);
 
       issues.push({
         char,
         code,
-        codeHex: `U+${code.toString(16).toUpperCase().padStart(4, "0")}`,
+        hex: `U+${code.toString(16).toUpperCase().padStart(4, "0")}`,
         position,
         type,
         name,
@@ -286,51 +302,53 @@ export const inspect = (text: string): InspectionReport => {
     }
   });
 
-  return {
-    needsCleaning: issues.length > 0,
-    issueCount: issues.length,
-    issues,
-  };
+  return issues;
 };
 
 /**
  * Clean LLM output by removing artifacts and normalizing typography
- * - Removes control characters and invisible formatting
- * - Converts Unicode spaces to regular spaces
- * - Converts em/en dashes to hyphens
- * - Preserves emojis and international text (Arabic, Cyrillic, Chinese, etc.)
- * - Preserves quotes (removed from normalization)
- *
  * @param text - Text to clean
+ * @param options - What to clean (default: invisible and spaces only)
  * @returns Cleaned text
  */
-export const clean = (text: string): string => {
-  // Remove invisible characters (context-aware for emojis)
+export const clean = (text: string, options: CleanOptions = {}): string => {
+  const opts: Required<CleanOptions> = { ...defaultOptions, ...options };
   let result = text;
 
   const hasEmojis = containsEmoji(text);
 
   // Remove control and invisible characters
-  INVISIBLE_CHARS.forEach((code) => {
-    // Skip ZWJ if we have emojis
-    if (code === 0x200d && hasEmojis) return;
-    result = result.replaceAll(String.fromCodePoint(code), "");
-  });
+  if (opts.invisible) {
+    INVISIBLE_CHARS.forEach((code) => {
+      // Skip ZWJ if we have emojis
+      if (code === 0x200d && hasEmojis) return;
+      result = result.replaceAll(String.fromCodePoint(code), "");
+    });
 
-  // Remove standalone ZWJ (not in emoji context)
-  if (!hasEmojis) {
-    result = result.replaceAll("\u200D", "");
+    // Remove standalone ZWJ (not in emoji context)
+    if (!hasEmojis) {
+      result = result.replaceAll("\u200D", "");
+    }
   }
 
   // Normalize Unicode spaces to regular space
-  UNICODE_SPACES.forEach((space) => {
-    result = result.replaceAll(space, " ");
-  });
+  if (opts.spaces) {
+    UNICODE_SPACES.forEach((space) => {
+      result = result.replaceAll(space, " ");
+    });
+  }
 
   // Normalize dashes
-  Object.entries(DASH_MAP).forEach(([from, to]) => {
-    result = result.replaceAll(from, to);
-  });
+  if (opts.dashes) {
+    Object.entries(DASH_MAP).forEach(([from, to]) => {
+      result = result.replaceAll(from, to);
+    });
+  }
+
+  // Normalize ellipsis
+  if (opts.ellipsis) {
+    result = result.replaceAll("\u2026", "...");
+  }
 
   return result;
 };

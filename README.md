@@ -47,16 +47,19 @@ bun add unllm
 
 ## API
 
-### `clean(text: string): string`
+### `clean(text: string, options?: CleanOptions): string`
 
 Removes LLM artifacts and normalizes typography to clean, human-like text.
 
-**What it does:**
-- Removes control characters (NULL, etc.)
-- Removes invisible formatting characters (ZWJ outside emojis, BOM, etc.)
-- Converts Unicode spaces to regular spaces
-- Converts em/en dashes to hyphens (`-`)
-- Converts ellipsis to three dots (`...`)
+**Options:**
+```typescript
+interface CleanOptions {
+  invisible?: boolean;  // Remove control/invisible chars (default: true)
+  spaces?: boolean;     // Normalize Unicode spaces (default: true)
+  dashes?: boolean;     // Normalize em/en dashes (default: false)
+  ellipsis?: boolean;   // Normalize ellipsis (default: false)
+}
+```
 
 **What it preserves:**
 - Emojis (including multi-part with ZWJ: 👨‍👩‍👧‍👦)
@@ -65,45 +68,48 @@ Removes LLM artifacts and normalizes typography to clean, human-like text.
 - Line breaks and tabs
 - Regular punctuation and symbols
 
+**Examples:**
 ```typescript
 import { clean } from 'unllm';
 
-// Basic usage
+// Basic usage (invisible + spaces only)
 clean("Hello\u00A0World");
 // → "Hello World"
 
-// Preserves emojis
-clean("Great work! 🎉\u00A0Let's celebrate");
-// → "Great work! 🎉 Let's celebrate"
+// Enable all normalizations
+clean("Text\u0000\u00A0\u2014test\u2026", {
+  invisible: true,
+  spaces: true,
+  dashes: true,
+  ellipsis: true
+});
+// → "Text -test..."
 
-// Preserves international text and quotes
+// Disable everything (pass-through)
+clean("Keep\u00A0all\u2014chars", {
+  invisible: false,
+  spaces: false
+});
+// → "Keep\u00A0all\u2014chars"
+
+// Preserves international text
 clean("C'est génial\u00A0!");
 // → "C'est génial !"
-
-// Handles mixed content
-clean("Text\u0000with\u00A0fancy\u2014chars\u2026");
-// → "Textwith fancy-chars..."
 ```
 
-### `inspect(text: string): InspectionReport`
+### `inspect(text: string, options?: CleanOptions): Issue[]`
 
-Analyzes text and reports all LLM artifacts and typographic characters that need cleaning.
+Analyzes text and returns array of issues found. Uses the same options as `clean()`.
 
 **Returns:**
 ```typescript
-interface InspectionReport {
-  needsCleaning: boolean;        // true if any issues found
-  issueCount: number;             // Total number of issues
-  issues: Issue[];                // Detailed issue list
-}
-
 interface Issue {
-  char: string;                   // The problematic character
-  code: number;                   // Unicode code point
-  codeHex: string;                // Hex representation (e.g., "U+00A0")
-  position: number;               // Position in string
+  char: string;        // The problematic character
+  code: number;        // Unicode code point
+  hex: string;         // Hex representation (e.g., "U+00A0")
+  position: number;    // Position in string
   type: 'control' | 'invisible' | 'typography';
-  name: string;                   // Human-readable name
+  name: string;        // Human-readable name
 }
 ```
 
@@ -111,34 +117,31 @@ interface Issue {
 ```typescript
 import { inspect } from 'unllm';
 
-const report = inspect("Hello\u00A0World\u2019s text");
+const issues = inspect("Hello\u00A0World\u2019s text");
 
-console.log(report);
-// {
-//   needsCleaning: true,
-//   issueCount: 2,
-//   issues: [
-//     {
-//       char: '\u00A0',
-//       code: 160,
-//       codeHex: 'U+00A0',
-//       position: 5,
-//       type: 'typography',
-//       name: 'NO-BREAK SPACE'
-//     },
-//     {
-//       char: '\u2019',
-//       code: 8217,
-//       codeHex: 'U+2019',
-//       position: 11,
-//       type: 'typography',
-//       name: 'SMART QUOTE'
-//     }
-//   ]
-// }
+console.log(issues);
+// [
+//   {
+//     char: '\u00A0',
+//     code: 160,
+//     hex: 'U+00A0',
+//     position: 5,
+//     type: 'typography',
+//     name: 'NO-BREAK SPACE'
+//   },
+//   {
+//     char: '\u2019',
+//     code: 8217,
+//     hex: 'U+2019',
+//     position: 11,
+//     type: 'typography',
+//     name: 'SMART QUOTE'
+//   }
+// ]
 
 // Quick check
-if (report.needsCleaning) {
+if (issues.length > 0) {
+  const text = "Hello\u00A0World\u2019s text";
   const cleaned = clean(text);
 }
 ```

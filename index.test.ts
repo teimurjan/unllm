@@ -1,46 +1,46 @@
 import { expect, test } from "bun:test";
 import { clean, inspect } from "./index";
 
-// Core cleaning tests
-test("clean removes NULL characters", () => {
+// Core cleaning tests (default: invisible + spaces only)
+test("clean removes NULL characters by default", () => {
   const input = "Hello\u0000World";
   const result = clean(input);
   expect(result).toBe("HelloWorld");
 });
 
-test("clean normalizes unicode spaces to ASCII", () => {
+test("clean normalizes unicode spaces by default", () => {
   const input = "Hello\u00A0World";
   const result = clean(input);
   expect(result).toBe("Hello World");
 });
 
-test("clean preserves smart quotes", () => {
-  const input = "\u2018Hello\u2019 \u201CWorld\u201D";
-  const result = clean(input);
-  expect(result).toBe("\u2018Hello\u2019 \u201CWorld\u201D");
-});
-
-test("clean preserves angle quotes", () => {
-  const input = "\u2039single\u203A \u00ABdouble\u00BB";
-  const result = clean(input);
-  expect(result).toBe("\u2039single\u203A \u00ABdouble\u00BB");
-});
-
-test("clean normalizes dashes to ASCII hyphen", () => {
+test("clean does not normalize dashes by default", () => {
   const input = "test\u2013dash\u2014test";
   const result = clean(input);
+  expect(result).toBe("test\u2013dash\u2014test");
+});
+
+test("clean normalizes dashes when enabled", () => {
+  const input = "test\u2013dash\u2014test";
+  const result = clean(input, { dashes: true });
   expect(result).toBe("test-dash-test");
 });
 
-test("clean normalizes ellipsis to three dots", () => {
+test("clean does not normalize ellipsis by default", () => {
   const input = "Wait\u2026";
   const result = clean(input);
+  expect(result).toBe("Wait\u2026");
+});
+
+test("clean normalizes ellipsis when enabled", () => {
+  const input = "Wait\u2026";
+  const result = clean(input, { ellipsis: true });
   expect(result).toBe("Wait...");
 });
 
-test("clean removes soft hyphen completely", () => {
+test("clean removes soft hyphen when dashes enabled", () => {
   const input = "soft\u00ADhyphen";
-  const result = clean(input);
+  const result = clean(input, { dashes: true });
   expect(result).toBe("softhyphen");
 });
 
@@ -124,6 +124,12 @@ test("clean preserves Chinese text", () => {
   expect(result).toBe("你好世界");
 });
 
+test("clean preserves smart quotes", () => {
+  const input = "\u2018Hello\u2019 \u201CWorld\u201D";
+  const result = clean(input);
+  expect(result).toBe("\u2018Hello\u2019 \u201CWorld\u201D");
+});
+
 test("clean preserves mixed international text with LLM artifacts", () => {
   const input = "Hello\u00A0مرحبا\u2018世界\u2019";
   const result = clean(input);
@@ -133,105 +139,117 @@ test("clean preserves mixed international text with LLM artifacts", () => {
 // Inspect tests
 test("inspect detects NULL character", () => {
   const input = "Hello\u0000World";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(true);
-  expect(report.issueCount).toBe(1);
-  expect(report.issues[0]?.type).toBe("control");
-  expect(report.issues[0]?.name).toBe("NULL");
-  expect(report.issues[0]?.position).toBe(5);
+  const issues = inspect(input);
+  expect(issues.length).toBe(1);
+  expect(issues[0]?.type).toBe("control");
+  expect(issues[0]?.name).toBe("NULL");
+  expect(issues[0]?.position).toBe(5);
 });
 
 test("inspect detects unicode spaces", () => {
   const input = "Hello\u00A0World";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(true);
-  expect(report.issueCount).toBe(1);
-  expect(report.issues[0]?.type).toBe("typography");
-  expect(report.issues[0]?.name).toBe("NO-BREAK SPACE");
+  const issues = inspect(input);
+  expect(issues.length).toBe(1);
+  expect(issues[0]?.type).toBe("typography");
+  expect(issues[0]?.name).toBe("NO-BREAK SPACE");
 });
 
 test("inspect does not flag smart quotes", () => {
   const input = "\u2018test\u2019";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(false);
-  expect(report.issueCount).toBe(0);
+  const issues = inspect(input);
+  expect(issues.length).toBe(0);
 });
 
-test("inspect detects dashes", () => {
+test("inspect does not detect dashes by default", () => {
   const input = "test\u2013dash";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(true);
-  expect(report.issueCount).toBe(1);
-  expect(report.issues[0]?.name).toBe("EN DASH");
+  const issues = inspect(input);
+  expect(issues.length).toBe(0);
 });
 
-test("inspect detects ellipsis", () => {
+test("inspect detects dashes when enabled", () => {
+  const input = "test\u2013dash";
+  const issues = inspect(input, { dashes: true });
+  expect(issues.length).toBe(1);
+  expect(issues[0]?.name).toBe("EN DASH");
+});
+
+test("inspect does not detect ellipsis by default", () => {
   const input = "Wait\u2026";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(true);
-  expect(report.issueCount).toBe(1);
-  expect(report.issues[0]?.name).toBe("HORIZONTAL ELLIPSIS");
+  const issues = inspect(input);
+  expect(issues.length).toBe(0);
 });
 
-test("inspect returns clean report for ASCII text", () => {
+test("inspect detects ellipsis when enabled", () => {
+  const input = "Wait\u2026";
+  const issues = inspect(input, { ellipsis: true });
+  expect(issues.length).toBe(1);
+});
+
+test("inspect returns empty array for clean text", () => {
   const input = "Hello World";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(false);
-  expect(report.issueCount).toBe(0);
-  expect(report.issues).toHaveLength(0);
+  const issues = inspect(input);
+  expect(issues.length).toBe(0);
 });
 
 test("inspect does not flag emojis", () => {
   const input = "Hello 👋 World";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(false);
-  expect(report.issueCount).toBe(0);
+  const issues = inspect(input);
+  expect(issues.length).toBe(0);
 });
 
 test("inspect does not flag international text", () => {
   const input = "Hello مرحبا 你好";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(false);
-  expect(report.issueCount).toBe(0);
+  const issues = inspect(input);
+  expect(issues.length).toBe(0);
 });
 
 test("inspect detects mixed artifacts and typography", () => {
   const input = "\u0000Hello\u00A0World";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(true);
-  expect(report.issueCount).toBe(2);
-  expect(report.issues[0]?.type).toBe("control");
-  expect(report.issues[1]?.type).toBe("typography");
+  const issues = inspect(input);
+  expect(issues.length).toBe(2);
+  expect(issues[0]?.type).toBe("control");
+  expect(issues[1]?.type).toBe("typography");
 });
 
 test("inspect includes correct hex codes", () => {
   const input = "\u00A0";
-  const report = inspect(input);
-  expect(report.issues[0]?.codeHex).toBe("U+00A0");
+  const issues = inspect(input);
+  expect(issues[0]?.hex).toBe("U+00A0");
 });
 
 test("inspect detects invisible characters", () => {
   const input = "text\u200Bwith\u200Czwsp";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(true);
-  expect(report.issueCount).toBe(2);
-  expect(report.issues[0]?.type).toBe("invisible");
-  expect(report.issues[1]?.type).toBe("invisible");
+  const issues = inspect(input);
+  expect(issues.length).toBe(2);
+  expect(issues[0]?.type).toBe("invisible");
+  expect(issues[1]?.type).toBe("invisible");
 });
 
 test("inspect detects BOM", () => {
   const input = "\uFEFFHello";
-  const report = inspect(input);
-  expect(report.needsCleaning).toBe(true);
-  expect(report.issueCount).toBe(1);
-  expect(report.issues[0]?.name).toBe("ZERO WIDTH NO-BREAK SPACE (BOM)");
+  const issues = inspect(input);
+  expect(issues.length).toBe(1);
+  expect(issues[0]?.name).toBe("ZERO WIDTH NO-BREAK SPACE (BOM)");
+});
+
+test("inspect can be disabled with all options false", () => {
+  const input = "Hello\u0000\u00A0\u2013\u2026World";
+  const issues = inspect(input, { invisible: false, spaces: false, dashes: false, ellipsis: false });
+  expect(issues.length).toBe(0);
+});
+
+test("inspect with only spaces disabled", () => {
+  const input = "Hello\u0000\u00A0World";
+  const issues = inspect(input, { spaces: false });
+  expect(issues.length).toBe(1); // Only NULL
+  expect(issues[0]?.type).toBe("control");
 });
 
 // Edge cases
-test("clean handles mixed content", () => {
-  const input = "Test\u0000with\u00A0\u2018quotes\u2019\u2026";
-  const result = clean(input);
-  expect(result).toBe("Testwith \u2018quotes\u2019...");
+test("clean handles mixed content with all options", () => {
+  const input = "Test\u0000with\u00A0\u2018quotes\u2019\u2014dash\u2026";
+  const result = clean(input, { invisible: true, spaces: true, dashes: true, ellipsis: true });
+  expect(result).toBe("Testwith \u2018quotes\u2019-dash...");
 });
 
 test("clean is idempotent", () => {
@@ -250,7 +268,12 @@ test("clean handles very long strings", () => {
 test("inspect after clean shows no issues", () => {
   const input = "Hello\u0000\u00A0World";
   const cleaned = clean(input);
-  const report = inspect(cleaned);
-  expect(report.needsCleaning).toBe(false);
-  expect(report.issueCount).toBe(0);
+  const issues = inspect(cleaned);
+  expect(issues.length).toBe(0);
+});
+
+test("clean with no options uses defaults", () => {
+  const input = "Hello\u0000\u00A0\u2013World";
+  const result = clean(input, {});
+  expect(result).toBe("Hello \u2013World"); // invisible + spaces, but not dashes
 });
