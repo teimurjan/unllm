@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/teimurjan/unllm/compare/v1.1.1...v2.0.0) (2025-11-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* dashes and ellipsis are turned off by default
+
+### Features
+
+* support config for clean and inspect ([6b2d93e](https://github.com/teimurjan/unllm/commit/6b2d93e27de2787bab37a779499c298734f83be5))
+
 ## [1.1.1](https://github.com/teimurjan/unllm/compare/v1.1.0...v1.1.1) (2025-11-21)
 
 
