@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/teimurjan/unllm/compare/v1.1.0...v1.1.1) (2025-11-21)
+
+
+### Bug Fixes
+
+* remove ellipsis handler ([1132f40](https://github.com/teimurjan/unllm/commit/1132f40521bf2d88db1759a88cf0b37df2a7d043))
+
 ## [1.1.0](https://github.com/teimurjan/unllm/compare/v1.0.0...v1.1.0) (2025-11-21)
 
 
