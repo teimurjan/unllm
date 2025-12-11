@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/teimurjan/unllm/compare/v2.0.0...v2.1.0) (2025-12-11)
+
+
+### Features
+
+* add quotes cleaning ([3b93b6a](https://github.com/teimurjan/unllm/commit/3b93b6aa8c6d149ed52708791c030aad0651e9c5))
+
 ## [2.0.0](https://github.com/teimurjan/unllm/compare/v1.1.1...v2.0.0) (2025-11-21)
 
 
