@@ -248,8 +248,8 @@ test("inspect with only spaces disabled", () => {
 // Edge cases
 test("clean handles mixed content with all options", () => {
   const input = "Test\u0000with\u00A0\u2018quotes\u2019\u2014dash\u2026";
-  const result = clean(input, { invisible: true, spaces: true, dashes: true, ellipsis: true });
-  expect(result).toBe("Testwith \u2018quotes\u2019-dash...");
+  const result = clean(input, { invisible: true, spaces: true, dashes: true, ellipsis: true, quotes: true });
+  expect(result).toBe("Testwith 'quotes'-dash...");
 });
 
 test("clean is idempotent", () => {
@@ -276,4 +276,57 @@ test("clean with no options uses defaults", () => {
   const input = "Hello\u0000\u00A0\u2013World";
   const result = clean(input, {});
   expect(result).toBe("Hello \u2013World"); // invisible + spaces, but not dashes
+});
+
+// Quotes tests
+test("clean does not normalize quotes by default", () => {
+  const input = "He said \u201CHello\u201D and \u2018goodbye\u2019";
+  const result = clean(input);
+  expect(result).toBe("He said \u201CHello\u201D and \u2018goodbye\u2019");
+});
+
+test("clean normalizes quotes to single quote when quotes: true", () => {
+  const input = "He said \u201CHello\u201D and \u2018goodbye\u2019";
+  const result = clean(input, { quotes: true });
+  expect(result).toBe("He said 'Hello' and 'goodbye'");
+});
+
+test("clean normalizes quotes to custom character when quotes is string", () => {
+  const input = "He said \u201CHello\u201D";
+  const result = clean(input, { quotes: '"' });
+  expect(result).toBe('He said "Hello"');
+});
+
+test("clean normalizes guillemets when quotes enabled", () => {
+  const input = "Il a dit \u00ABbonjour\u00BB";
+  const result = clean(input, { quotes: true });
+  expect(result).toBe("Il a dit 'bonjour'");
+});
+
+test("clean normalizes all quote types", () => {
+  const input = "\u2018\u2019\u201A\u201B\u201C\u201D\u201E\u201F\u2039\u203A\u00AB\u00BB";
+  const result = clean(input, { quotes: true });
+  expect(result).toBe("''''''''''''");
+});
+
+test("inspect does not detect quotes by default", () => {
+  const input = "He said \u201CHello\u201D";
+  const issues = inspect(input);
+  expect(issues.length).toBe(0);
+});
+
+test("inspect detects quotes when enabled", () => {
+  const input = "He said \u201CHello\u201D";
+  const issues = inspect(input, { quotes: true });
+  expect(issues.length).toBe(2);
+  expect(issues[0]?.name).toBe("LEFT DOUBLE QUOTATION MARK");
+  expect(issues[1]?.name).toBe("RIGHT DOUBLE QUOTATION MARK");
+});
+
+test("inspect detects single quotes when enabled", () => {
+  const input = "\u2018test\u2019";
+  const issues = inspect(input, { quotes: true });
+  expect(issues.length).toBe(2);
+  expect(issues[0]?.name).toBe("LEFT SINGLE QUOTATION MARK");
+  expect(issues[1]?.name).toBe("RIGHT SINGLE QUOTATION MARK");
 });

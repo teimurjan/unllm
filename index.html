@@ -19,6 +19,7 @@
     const spacesChecked = van.state(true);
     const dashesChecked = van.state(false);
     const ellipsisChecked = van.state(false);
+    const quotesChecked = van.state(false);
 
     const cleanedText = van.derive(() => {
       if (!inputText.val) return "";
@@ -27,6 +28,7 @@
         spaces: spacesChecked.val,
         dashes: dashesChecked.val,
         ellipsis: ellipsisChecked.val,
+        quotes: quotesChecked.val,
       });
     });
 
@@ -37,6 +39,7 @@
         spaces: spacesChecked.val,
         dashes: dashesChecked.val,
         ellipsis: ellipsisChecked.val,
+        quotes: quotesChecked.val,
       });
     });
 
@@ -83,6 +86,7 @@
         Checkbox("Normalize spaces", spacesChecked),
         Checkbox("Normalize dashes", dashesChecked),
         Checkbox("Normalize ellipsis", ellipsisChecked),
+        Checkbox("Normalize quotes", quotesChecked),
       ),
 
       div(

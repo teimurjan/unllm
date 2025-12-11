@@ -10,6 +10,8 @@ export interface CleanOptions {
   dashes?: boolean;
   /** Normalize/detect ellipsis to three dots (default: false) */
   ellipsis?: boolean;
+  /** Normalize/detect smart quotes. true = normalize to ', string = normalize to that character (default: false) */
+  quotes?: boolean | string;
 }
 
 /**
@@ -38,6 +40,7 @@ const defaultOptions: Required<CleanOptions> = {
   spaces: true,
   dashes: false,
   ellipsis: false,
+  quotes: false,
 };
 
 /**
@@ -68,6 +71,22 @@ const DASH_MAP: Record<string, string> = {
   "\u2212": "-", // MINUS SIGN
   "\u00AD": "", // SOFT HYPHEN (remove completely)
 };
+
+// Smart quotes to normalize
+const QUOTE_CHARS = [
+  "\u2018", // LEFT SINGLE QUOTATION MARK '
+  "\u2019", // RIGHT SINGLE QUOTATION MARK '
+  "\u201A", // SINGLE LOW-9 QUOTATION MARK ‚
+  "\u201B", // SINGLE HIGH-REVERSED-9 QUOTATION MARK ‛
+  "\u201C", // LEFT DOUBLE QUOTATION MARK "
+  "\u201D", // RIGHT DOUBLE QUOTATION MARK "
+  "\u201E", // DOUBLE LOW-9 QUOTATION MARK „
+  "\u201F", // DOUBLE HIGH-REVERSED-9 QUOTATION MARK ‟
+  "\u2039", // SINGLE LEFT-POINTING ANGLE QUOTATION MARK ‹
+  "\u203A", // SINGLE RIGHT-POINTING ANGLE QUOTATION MARK ›
+  "\u00AB", // LEFT-POINTING DOUBLE ANGLE QUOTATION MARK «
+  "\u00BB", // RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK »
+] as const;
 
 // Invisible/control characters that LLMs incorrectly insert
 const INVISIBLE_CHARS = [
@@ -209,6 +228,7 @@ const needsCleaning = (char: string, options: Required<CleanOptions>): boolean =
   if (options.spaces && UNICODE_SPACES.includes(char as any)) return true;
   if (options.dashes && char in DASH_MAP) return true;
   if (options.ellipsis && code === 0x2026) return true;
+  if (options.quotes && QUOTE_CHARS.includes(char as any)) return true;
 
   return false;
 };
@@ -268,6 +288,22 @@ const getCharInfo = (
     if (code === 0x2014) return { type: "typography", name: "EM DASH" };
     if (code === 0x2212) return { type: "typography", name: "MINUS SIGN" };
     if (code === 0x00ad) return { type: "typography", name: "SOFT HYPHEN" };
+  }
+
+  if (QUOTE_CHARS.includes(char as any)) {
+    if (code === 0x2018) return { type: "typography", name: "LEFT SINGLE QUOTATION MARK" };
+    if (code === 0x2019) return { type: "typography", name: "RIGHT SINGLE QUOTATION MARK" };
+    if (code === 0x201a) return { type: "typography", name: "SINGLE LOW-9 QUOTATION MARK" };
+    if (code === 0x201b) return { type: "typography", name: "SINGLE HIGH-REVERSED-9 QUOTATION MARK" };
+    if (code === 0x201c) return { type: "typography", name: "LEFT DOUBLE QUOTATION MARK" };
+    if (code === 0x201d) return { type: "typography", name: "RIGHT DOUBLE QUOTATION MARK" };
+    if (code === 0x201e) return { type: "typography", name: "DOUBLE LOW-9 QUOTATION MARK" };
+    if (code === 0x201f) return { type: "typography", name: "DOUBLE HIGH-REVERSED-9 QUOTATION MARK" };
+    if (code === 0x2039) return { type: "typography", name: "SINGLE LEFT-POINTING ANGLE QUOTATION MARK" };
+    if (code === 0x203a) return { type: "typography", name: "SINGLE RIGHT-POINTING ANGLE QUOTATION MARK" };
+    if (code === 0x00ab) return { type: "typography", name: "LEFT-POINTING DOUBLE ANGLE QUOTATION MARK" };
+    if (code === 0x00bb) return { type: "typography", name: "RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK" };
+    return { type: "typography", name: "SMART QUOTE" };
   }
 
   return {
@@ -348,6 +384,14 @@ export const clean = (text: string, options: CleanOptions = {}): string => {
   // Normalize ellipsis
   if (opts.ellipsis) {
     result = result.replaceAll("\u2026", "...");
+  }
+
+  // Normalize quotes
+  if (opts.quotes) {
+    const quoteChar = typeof opts.quotes === "string" ? opts.quotes : "'";
+    QUOTE_CHARS.forEach((quote) => {
+      result = result.replaceAll(quote, quoteChar);
+    });
   }
 
   return result;

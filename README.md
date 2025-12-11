@@ -35,10 +35,10 @@ This library normalizes LLM output to look natural while preserving emojis, quot
 |-------|--------|------|
 | `"Hello\u0000World"` | `"HelloWorld"` | Removes NULL |
 | `"Hello\u00A0World"` | `"Hello World"` | NBSP → space |
-| `"foo\u2014bar"` | `"foo-bar"` | Em dash → hyphen |
-| `"Wait\u2026"` | `"Wait..."` | Ellipsis → dots |
+| `"foo\u2014bar"` | `"foo-bar"` | Em dash → hyphen (opt-in) |
+| `"Wait\u2026"` | `"Wait..."` | Ellipsis → dots (opt-in) |
+| `"He said "Hi""` | `"He said 'Hi'"` | Smart quotes → `'` (opt-in) |
 | `"Hi 👋 مرحبا"` | `"Hi 👋 مرحبا"` | Preserves emojis & international text |
-| `"C'est génial!"` | `"C'est génial!"` | Preserves quotes |
 
 ## Installation
 
@@ -59,17 +59,18 @@ Removes LLM artifacts and normalizes typography to clean, human-like text.
 **Options:**
 ```typescript
 interface CleanOptions {
-  invisible?: boolean;  // Remove control/invisible chars (default: true)
-  spaces?: boolean;     // Normalize Unicode spaces (default: true)
-  dashes?: boolean;     // Normalize em/en dashes (default: false)
-  ellipsis?: boolean;   // Normalize ellipsis (default: false)
+  invisible?: boolean;        // Remove control/invisible chars (default: true)
+  spaces?: boolean;           // Normalize Unicode spaces (default: true)
+  dashes?: boolean;           // Normalize em/en dashes (default: false)
+  ellipsis?: boolean;         // Normalize ellipsis (default: false)
+  quotes?: boolean | string;  // Normalize smart quotes (default: false)
+                              // true = normalize to ', string = normalize to that char
 }
 ```
 
 **What it preserves:**
 - Emojis (including multi-part with ZWJ: 👨‍👩‍👧‍👦)
 - International text (Arabic, Chinese, Cyrillic, etc.)
-- Quotes (both straight and smart quotes)
 - Line breaks and tabs
 - Regular punctuation and symbols
 
@@ -86,9 +87,18 @@ clean("Text\u0000\u00A0\u2014test\u2026", {
   invisible: true,
   spaces: true,
   dashes: true,
-  ellipsis: true
+  ellipsis: true,
+  quotes: true
 });
 // → "Text -test..."
+
+// Normalize smart quotes to single quote
+clean("He said \u201CHello\u201D", { quotes: true });
+// → "He said 'Hello'"
+
+// Normalize smart quotes to double quote
+clean("He said \u201CHello\u201D", { quotes: '"' });
+// → 'He said "Hello"'
 
 // Disable everything (pass-through)
 clean("Keep\u00A0all\u2014chars", {
@@ -122,7 +132,7 @@ interface Issue {
 ```typescript
 import { inspect } from 'unllm';
 
-const issues = inspect("Hello\u00A0World\u2019s text");
+const issues = inspect("Hello\u00A0World");
 
 console.log(issues);
 // [
@@ -133,21 +143,16 @@ console.log(issues);
 //     position: 5,
 //     type: 'typography',
 //     name: 'NO-BREAK SPACE'
-//   },
-//   {
-//     char: '\u2019',
-//     code: 8217,
-//     hex: 'U+2019',
-//     position: 11,
-//     type: 'typography',
-//     name: 'SMART QUOTE'
 //   }
 // ]
 
+// Detect smart quotes (disabled by default)
+const quoteIssues = inspect("He said \u201CHello\u201D", { quotes: true });
+// → 2 issues: LEFT/RIGHT DOUBLE QUOTATION MARK
+
 // Quick check
 if (issues.length > 0) {
-  const text = "Hello\u00A0World\u2019s text";
-  const cleaned = clean(text);
+  const cleaned = clean("Hello\u00A0World");
 }
 ```
 
@@ -179,7 +184,7 @@ if (issues.length > 0) {
 - Dashes: em dash (`\u2014`), en dash (`\u2013`), minus (`\u2212`) → `-`
 - Ellipsis: `\u2026` → `...`
 - Soft hyphen: `\u00AD` → removed
-- **Quotes preserved**: Smart quotes and all other quotation marks are kept as-is
+- Smart quotes (opt-in): `"` `"` `'` `'` `«` `»` etc. → `'` or custom char
 
 ## Design Principles
 
